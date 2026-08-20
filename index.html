@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="매일 하나씩 — 가타카나, 히라가나, 단어, 문장. 일본어와 한국 발음, 뜻만 한 페이지에.">
+<meta name="theme-color" content="#fbfaf9">
+<title>jzzinsil's japanese</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>あ</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<svg class="hidden" aria-hidden="true"><defs>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12.5 5.5 5.5L20 7"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-eraser" viewBox="0 0 24 24"><path d="m5 15 6-6 6 6-3.5 3.5H8.5z"/><path d="M4 20h16"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></symbol>
+</defs></svg>
+
+<header class="top">
+  <span class="mark">jzzinsil's japanese</span>
+  <button class="ico" id="themeBtn" aria-label="테마 전환"><svg id="themeIcon"><use href="#i-moon"></use></svg></button>
+  <button class="ico" id="drawerBtn" aria-label="복습 열기"><svg><use href="#i-list"></use></svg></button>
+</header>
+
+<main class="shell">
+  <div class="daybar">
+    <button class="nav" id="prevDay" aria-label="이전 날"><svg><use href="#i-left"></use></svg></button>
+    <div class="mid">
+      <div class="d" id="dayNo">Day 1</div>
+      <div class="s" id="dayMeta">—</div>
+    </div>
+    <button class="nav" id="nextDay" aria-label="다음 날"><svg><use href="#i-right"></use></svg></button>
+  </div>
+
+  <div id="stage"></div>
+
+  <div class="finish">
+    <button class="cta" id="doneBtn"><svg><use href="#i-check"></use></svg><span id="doneLabel">오늘 다 봤어요</span></button>
+    <p class="note" id="doneNote"></p>
+  </div>
+
+  <p class="foot">하루 4가지 · 46일이면 오십음도 완주</p>
+</main>
+
+<div class="scrim" id="scrim" data-open="false"></div>
+<aside class="drawer" id="drawer" data-open="false" aria-label="복습" aria-hidden="true">
+  <div class="dhead">
+    <h2>복습</h2>
+    <button class="ico" id="drawerClose" aria-label="닫기"><svg><use href="#i-close"></use></svg></button>
+  </div>
+  <div class="tabs" id="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="kana">오십음도</button>
+    <button role="tab" aria-selected="false" data-tab="words">단어</button>
+    <button role="tab" aria-selected="false" data-tab="grammar">문장</button>
+    <button role="tab" aria-selected="false" data-tab="rules">발음 규칙</button>
+    <button role="tab" aria-selected="false" data-tab="settings">설정</button>
+  </div>
+  <div class="dbody" id="dbody"></div>
+</aside>
+
+<div class="toast" id="toast" data-show="false" role="status"></div>
+
+<script src="data/kana2kr.js"></script>
+<script src="data/hiragana.js"></script>
+<script src="data/katakana.js"></script>
+<script src="data/words.js"></script>
+<script src="data/grammar.js"></script>
+<script src="data/reference.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
