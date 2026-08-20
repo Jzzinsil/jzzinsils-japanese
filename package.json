@@ -1,0 +1,21 @@
+{
+  "name": "jzzinsils-japanese",
+  "version": "1.0.0",
+  "description": "매일 하나씩 — 가타카나, 히라가나, 단어, 문장. 일본어와 한국 발음, 뜻만 한 페이지에.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"No tests configured\" && exit 0"
+  },
+  "keywords": [
+    "japanese",
+    "learning",
+    "kana",
+    "hiragana",
+    "katakana"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
+}
