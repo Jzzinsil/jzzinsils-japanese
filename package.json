@@ -1,0 +1,23 @@
+{
+  "name": "primary",
+  "version": "1.0.0",
+  "description": "하루에 네 가지만 보는 일본어 학습 페이지. **일본어 · 한국 발음 · 뜻**만 남기고 나머지는 접어뒀습니다. 빌드 도구도 웹폰트도 없이 돌아가고, 진도는 브라우저(localStorage)에 저장됩니다.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jzzinsil/jzzinsils-japanese.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Jzzinsil/jzzinsils-japanese/issues"
+  },
+  "homepage": "https://github.com/Jzzinsil/jzzinsils-japanese#readme",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
+}
