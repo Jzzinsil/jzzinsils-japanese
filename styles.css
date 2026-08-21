@@ -49,12 +49,16 @@
 }
 
 *,*::before,*::after{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;overflow-x:hidden;overflow-x:clip}
 body{
   margin:0;background:var(--bg);color:var(--ink);
   font-family:var(--ui);font-size:15px;line-height:1.6;
-  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  width:100%;max-width:100%;overflow-x:hidden;overflow-x:clip;
 }
+img,svg,canvas,video{max-width:100%}
+/* 긴 단어 하나가 컨테이너를 밀어내지 못하게 */
+p,span,div,td,th,summary{overflow-wrap:anywhere}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:8px}
@@ -108,18 +112,20 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 .focus{text-align:center;padding:26px 0 22px}
 .glyph{
   font-family:var(--jp);font-weight:400;color:var(--ink);
-  font-size:clamp(112px,32vw,168px);line-height:1;letter-spacing:0;
+  font-size:clamp(84px,30vw,168px);line-height:1;letter-spacing:0;
+  max-width:100%;overflow-wrap:normal;
 }
 .word{
   font-family:var(--jp);font-weight:600;color:var(--ink);
-  font-size:clamp(42px,12vw,66px);line-height:1.16;letter-spacing:-.01em;word-break:keep-all;
+  font-size:clamp(32px,11vw,66px);line-height:1.16;letter-spacing:-.01em;
+  word-break:normal;overflow-wrap:anywhere;max-width:100%;
 }
 .kana{font-family:var(--jp);font-size:16px;color:var(--ink-2);margin-top:12px;letter-spacing:.06em}
 .pron{font-size:21px;font-weight:600;color:var(--ink);margin-top:14px;letter-spacing:-.01em}
 .glyph + .pron{margin-top:20px}
 .mean{font-size:15px;color:var(--ink-2);margin-top:8px}
 .meta{font-size:12px;color:var(--ink-3);margin-top:14px;letter-spacing:0}
-.pattern{font-family:var(--jp);font-size:clamp(26px,7vw,34px);font-weight:600;line-height:1.35;word-break:keep-all}
+.pattern{font-family:var(--jp);font-size:clamp(21px,6.2vw,34px);font-weight:600;line-height:1.35;word-break:normal;overflow-wrap:anywhere}
 .rule{font-size:14px;color:var(--ink-2);margin-top:12px;max-width:34em;margin-left:auto;margin-right:auto;text-align:center}
 
 /* ── 줄 목록 (예시 단어 / 활용형) ── */
@@ -130,7 +136,7 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 }
 .rows .row:last-child{border-bottom:0}
 .row .l{flex:1 1 auto;min-width:0}
-.row .jp{font-family:var(--jp);font-size:20px;font-weight:500;color:var(--ink);letter-spacing:0;display:block;word-break:keep-all}
+.row .jp{font-family:var(--jp);font-size:clamp(17px,4.4vw,20px);font-weight:500;color:var(--ink);letter-spacing:0;display:block;word-break:normal;overflow-wrap:anywhere;min-width:0}
 .row .kr{font-size:12.5px;color:var(--ink-3);margin-top:3px;display:block}
 .row .ko{flex:0 1 auto;font-size:13.5px;color:var(--ink-2);text-align:right;max-width:40%;word-break:keep-all;padding-top:2px}
 .row .tag{
@@ -150,16 +156,17 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 /* ── 예문 ── */
 .sent{
   background:var(--field);border-radius:var(--r-md);padding:18px 18px 16px;margin-top:16px;
-  display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;
 }
-.sent .jp{font-family:var(--jp);font-size:21px;font-weight:500;line-height:1.55;margin:0;word-break:keep-all;letter-spacing:0}
+.sent>div{min-width:0}
+.sent .jp{font-family:var(--jp);font-size:clamp(17px,4.6vw,21px);font-weight:500;line-height:1.55;margin:0;word-break:normal;overflow-wrap:anywhere;letter-spacing:0}
 .sent .kr{font-size:13px;color:var(--ink-3);margin:7px 0 0}
 .sent .ko{font-size:14px;color:var(--ink-2);margin:6px 0 0}
 .sent .when{font-size:11.5px;color:var(--ink-3);margin:0 0 10px;letter-spacing:.02em}
 
 /* ── 발음 버튼 ── */
 .say{
-  flex:0 0 auto;width:34px;height:34px;border-radius:var(--r-pill);border:1px solid var(--line-2);
+  flex:0 0 auto;justify-self:end;width:34px;height:34px;border-radius:var(--r-pill);border:1px solid var(--line-2);
   display:inline-flex;align-items:center;justify-content:center;color:var(--ink-3);
   transition:color .18s,border-color .18s,background .18s;
 }
@@ -224,11 +231,13 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 .scrim{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.32);opacity:0;pointer-events:none;transition:opacity .22s}
 .scrim[data-open="true"]{opacity:1;pointer-events:auto}
 .drawer{
-  position:fixed;inset:0 0 0 auto;z-index:41;width:min(430px,100%);
+  position:fixed;inset:0 0 0 auto;z-index:41;width:min(430px,100%);max-width:100%;
   background:var(--bg);border-left:1px solid var(--line);display:flex;flex-direction:column;
-  transform:translateX(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);
+  transform:translateX(100%);
+  visibility:hidden;                     /* 닫혔을 때 레이아웃·스크롤에서 완전히 제외 */
+  transition:transform .28s cubic-bezier(.32,.72,0,1),visibility 0s linear .28s;
 }
-.drawer[data-open="true"]{transform:translateX(0)}
+.drawer[data-open="true"]{transform:translateX(0);visibility:visible;transition:transform .28s cubic-bezier(.32,.72,0,1),visibility 0s}
 .dhead{display:flex;align-items:center;gap:8px;padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid var(--line)}
 .dhead h2{font-size:14px;font-weight:600;margin:0;margin-right:auto;letter-spacing:-.01em}
 .tabs{display:flex;gap:6px;padding:12px 16px 0;overflow-x:auto;scrollbar-width:none}
@@ -298,11 +307,41 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 .sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .foot{text-align:center;font-size:11.5px;color:var(--ink-3);margin-top:34px;line-height:1.9}
 
-@media (max-width:430px){
-  .block{padding:22px 17px}
-  .row .jp{font-size:18.5px}
+/* ── 태블릿 이하 ── */
+@media (max-width:768px){
+  .shell{padding:20px 16px 64px}
+}
+/* ── 일반적인 휴대폰 ── */
+@media (max-width:480px){
+  .shell{padding:18px 14px 60px}
+  .block{padding:22px 16px}
   .row.form{flex-wrap:wrap}
   .row.form .ko{order:9;flex:1 1 100%;max-width:none;text-align:left;padding-top:2px;font-size:13px}
+  .row .ko{max-width:46%}
+  .sent{padding:16px 15px 14px}
+}
+/* ── 좁은 휴대폰 (iPhone SE 등) ── */
+/* 좁은 화면에서는 복습 탭을 가로 스크롤 대신 줄바꿈 */
+@media (max-width:400px){
+  .tabs{flex-wrap:wrap;overflow-x:visible;row-gap:6px}
+  .tabs button{padding:0 11px;font-size:12px}
+}
+@media (max-width:360px){
+  .shell{padding:16px 12px 56px}
+  .block{padding:20px 14px;border-radius:18px}
+  .top{padding:12px 14px}
+  .mark{font-size:14px}
+  .row{flex-wrap:wrap}
+  .row .ko{flex:1 1 100%;max-width:none;text-align:left;order:9;padding-top:4px}
+  .daybar .d{font-size:16px}
+  .daybar .s{font-size:11.5px}
+  .chart{gap:5px}
+  .cell .c{font-size:19px}
+}
+/* ── 가로 모드 등 높이가 짧을 때 ── */
+@media (max-height:520px) and (orientation:landscape){
+  .focus{padding:16px 0 14px}
+  .glyph{font-size:clamp(64px,16vh,110px)}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
