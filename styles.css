@@ -140,6 +140,13 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 }
 .row .say{align-self:center}
 
+
+/* 숫자 표는 행이 많아 밀도를 높인다 */
+.rows.nums .row{padding:9px 0}
+.rows.nums .jp{font-size:18px}
+.rows.nums .kr{margin-top:2px}
+.rows.nums .tag{margin-top:2px;min-width:46px;justify-content:center;display:inline-flex}
+
 /* ── 예문 ── */
 .sent{
   background:var(--field);border-radius:var(--r-md);padding:18px 18px 16px;margin-top:16px;

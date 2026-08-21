@@ -4,9 +4,34 @@
 (function () {
   'use strict';
 
-  var TOTAL = 46;
+  var PHASE1 = 46;          // Day 1~46 · 오십음도 + 기초 문형
+  var MAXDAY = 999;         // 표시상의 상한 (그 이후는 복습 순환이 계속 돌아감)
+  var STRIDE = 13;          // 복습 순환 간격 (40과 서로소 → 40일 다 돌고 반복)
   var KEY = 'jzzinsil-japanese-v1';
   var OLD_KEY = 'mainichi-nihongo-v1';   // 이전 버전 진도 이어받기
+  var LV = {
+    1:'기본 경어', 2:'사내 커뮤니케이션', 3:'뉴스와 시사', 4:'문어와 경영'
+  };
+
+  function advLen() { return (window.ADVANCED || []).length; }
+  function lastDay() { return PHASE1 + advLen(); }
+  // Day 번호 → 어떤 데이터를 보여줄지
+  function resolve(day) {
+    if (day <= PHASE1) return { mode: 'basic', i: day - 1 };
+    var last = lastDay();
+    if (day <= last) return { mode: 'adv', i: day - PHASE1 - 1 };
+    if (!advLen()) return { mode: 'basic', i: 0 };
+    var r = day - last;                                  // 복습 순환 회차
+    var i = ((r - 1) * STRIDE) % advLen();
+    return { mode: 'adv', i: i, review: PHASE1 + i + 1 };
+  }
+  function levelText(day) {
+    if (day <= PHASE1) return '기초 · 오십음도';
+    var r = resolve(day);
+    if (r.review) return '복습 순환 · Day ' + r.review + ' 다시 보기';
+    var d = window.ADVANCED[r.i];
+    return 'LEVEL ' + d.lv + ' · ' + (LV[d.lv] || '');
+  }
 
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
@@ -38,7 +63,7 @@
         if (p && typeof p === 'object') for (var k in d) if (Object.prototype.hasOwnProperty.call(p, k)) d[k] = p[k];
       } catch (e) {}
     }
-    d.day = Math.min(Math.max(1, parseInt(d.day, 10) || 1), TOTAL);
+    d.day = Math.min(Math.max(1, parseInt(d.day, 10) || 1), MAXDAY);
     if (!Array.isArray(d.done)) d.done = [];
     d.streak = Math.max(0, parseInt(d.streak, 10) || 0);
     return d;
@@ -50,7 +75,7 @@
   function rollover() {
     var t = today();
     if (state.lastDone && state.lastDone !== t && state.lastDone !== shift(-1)) state.streak = 0;
-    if (state.lastDone && state.lastDone !== t && isDone(state.day)) state.day = Math.min(state.day + 1, TOTAL);
+    if (state.lastDone && state.lastDone !== t && isDone(state.day)) state.day = Math.min(state.day + 1, MAXDAY);
     save();
   }
 
@@ -95,7 +120,7 @@
       (tag ? '<span class="tag">' + esc(tag) + '</span>' : '') +
       '<div class="l"><span class="jp">' + esc(jp) + '</span>' +
       (pron ? '<span class="kr">' + esc(pron) + '</span>' : '') + '</div>' +
-      '<span class="ko">' + esc(mean) + '</span>' +
+      (mean ? '<span class="ko">' + esc(mean) + '</span>' : '') +
       say(jp, 'sm') + '</div>';
   }
   function sentence(jp, pron, mean, when) {
@@ -170,27 +195,71 @@
     '</section>';
   }
 
+  /* ── Day 47+ 블록 ── */
+  function advWordBlock(d, idx) {
+    return '<section class="block">' + head(idx, 'ことば 단어', d.word.w) +
+      '<div class="focus">' +
+        '<div class="word">' + esc(d.word.w) + '</div>' +
+        '<div class="kana">' + esc(d.word.rd) + '</div>' +
+        '<div class="pron">' + esc(kr(d.word.rd)) + '</div>' +
+        '<div class="mean">' + esc(d.word.m) + '</div>' +
+        '<div class="meta">' + esc(d.word.pos + ' · ' + d.theme) + '</div>' +
+      '</div>' +
+      more(esc(d.word.note)) +
+    '</section>';
+  }
+  function sentBlock(o, idx, label) {
+    return '<section class="block">' + head(idx, label, o.jp) +
+      sentence(o.jp, kr(o.rd), o.ko, o.when || '') +
+      more(esc(o.note || '')) +
+    '</section>';
+  }
+  function numBlock(n, idx) {
+    var rows = (n.rows || []).map(function (r) {
+      return row(r[1], r[2] + ' · ' + kr(r[2]), '', r[0]);
+    }).join('');
+    return '<section class="block">' + head(idx, '数 숫자', '') +
+      '<div class="focus" style="padding:18px 0 16px">' +
+        '<div class="pattern">' + esc(n.t) + '</div>' +
+      '</div>' +
+      '<div class="rows nums">' + rows + '</div>' +
+      sentence(n.jp, kr(n.rd), n.ko, '') +
+      more(esc(n.note)) +
+    '</section>';
+  }
+
   /* ── 그리기 ── */
   function render() {
-    var i = state.day - 1;
+    var r = resolve(state.day);
     $('#dayNo').textContent = 'Day ' + state.day;
-    var bits = [pretty(), state.done.length + '/' + TOTAL + ' 완료'];
+    var bits = [pretty(), levelText(state.day), '완료 ' + state.done.length + '일'];
     if (state.streak > 0) bits.push('연속 ' + state.streak + '일');
     $('#dayMeta').textContent = bits.join(' · ');
     $('#prevDay').disabled = state.day <= 1;
-    $('#nextDay').disabled = state.day >= TOTAL;
+    $('#nextDay').disabled = state.day >= MAXDAY;
 
-    $('#stage').innerHTML =
-      kanaBlock(window.KATAKANA[i], '01', 'カタカナ 가타카나', 'kata') +
-      kanaBlock(window.HIRAGANA[i], '02', 'ひらがな 히라가나', 'hira') +
-      wordBlock(window.WORDS[i], '03') +
-      grammarBlock(window.GRAMMAR[i], '04');
+    var html;
+    if (r.mode === 'basic') {
+      var i = r.i;
+      html = kanaBlock(window.KATAKANA[i], '01', 'カタカナ 가타카나', 'kata') +
+             kanaBlock(window.HIRAGANA[i], '02', 'ひらがな 히라가나', 'hira') +
+             wordBlock(window.WORDS[i], '03') +
+             grammarBlock(window.GRAMMAR[i], '04');
+    } else {
+      var d = window.ADVANCED[r.i], n = (window.NUMBERS || [])[r.i];
+      html = advWordBlock(d, '01') +
+             sentBlock(d.use, '02', 'この単語で 이 단어를 쓴 문장') +
+             sentBlock(d.daily, '03', 'よく使う表現 자주 쓰는 표현') +
+             sentBlock(d.biz, '04', 'ビジネス 비즈니스 문장') +
+             (n ? numBlock(n, '05') : '');
+    }
+    $('#stage').innerHTML = html;
 
     var done = isDone(state.day);
     $('#doneLabel').textContent = done ? '완료했어요' : '오늘 다 봤어요';
     $('#doneBtn').classList.toggle('ghost', done);
     $('#doneNote').textContent = done
-      ? (state.day < TOTAL ? '내일 이어서 Day ' + (state.day + 1) : '46일 완주! 오십음도를 다 봤어요')
+      ? '내일 이어서 Day ' + (state.day + 1) + (state.day >= lastDay() ? ' · 복습 순환' : '')
       : '';
     mountTrace($('#stage'));
   }
@@ -259,13 +328,14 @@
     toast('Day ' + state.day + ' 완료 · 연속 ' + state.streak + '일');
   }
   function go(n) {
-    state.day = Math.min(Math.max(1, n), TOTAL);
+    state.day = Math.min(Math.max(1, n), MAXDAY);
     save(); render();
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   /* ── 복습 서랍 ── */
   var tab = 'kana';
+  function seenAdv() { return Math.max(0, Math.min(seenUpTo(), lastDay()) - PHASE1); }
   function openDrawer() {
     $('#drawer').dataset.open = 'true'; $('#drawer').setAttribute('aria-hidden', 'false');
     $('#scrim').dataset.open = 'true'; drawBody(); $('#drawerClose').focus();
@@ -277,12 +347,12 @@
   function drawBody() {
     $$('#tabs button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tab === tab)); });
     var body = $('#dbody');
-    body.innerHTML = ({ kana: tKana, words: tWords, grammar: tGrammar, rules: tRules, settings: tSettings }[tab])();
+    body.innerHTML = ({ kana: tKana, words: tWords, grammar: tGrammar, numbers: tNumbers, rules: tRules, settings: tSettings }[tab])();
     body.scrollTop = 0;
   }
 
   function tKana() {
-    var lim = seenUpTo();
+    var lim = Math.min(seenUpTo(), PHASE1);
     function chart(list, label) {
       var out = '';
       list.forEach(function (it, i) {
@@ -299,28 +369,64 @@
       chart(window.HIRAGANA, 'ひらがな 히라가나') + chart(window.KATAKANA, 'カタカナ 가타카나');
   }
   function tWords() {
-    var n = seenUpTo();
-    return window.WORDS.slice(0, n).map(function (w, i) {
-      return '<details class="item"><summary><span class="n">' + (i + 1) + '</span>' +
+    var n = Math.min(seenUpTo(), PHASE1), out = [];
+    window.WORDS.slice(0, n).forEach(function (w, i) {
+      out.push('<details class="item"><summary><span class="n">' + (i + 1) + '</span>' +
         '<span class="t">' + esc(w.w) + '</span><span class="m">' + esc(w.m) + '</span></summary>' +
         '<div class="in"><span class="kr">' + esc(w.rd) + ' · ' + esc(kr(w.rd)) + '</span><br>' +
         '<span class="jp">' + esc(w.jp) + '</span><span class="kr">' + esc(kr(w.jpr)) + '</span>' +
-        esc(w.ko) + '</div></details>';
-    }).reverse().join('');
+        esc(w.ko) + '</div></details>');
+    });
+    (window.ADVANCED || []).slice(0, seenAdv()).forEach(function (d, i) {
+      out.push('<details class="item"><summary><span class="n">' + (PHASE1 + i + 1) + '</span>' +
+        '<span class="t">' + esc(d.word.w) + '</span><span class="m">' + esc(d.word.m) + '</span></summary>' +
+        '<div class="in"><span class="kr">' + esc(d.word.rd) + ' · ' + esc(kr(d.word.rd)) + '</span><br>' +
+        '<span class="jp">' + esc(d.use.jp) + '</span><span class="kr">' + esc(kr(d.use.rd)) + '</span>' +
+        esc(d.use.ko) + '</div></details>');
+    });
+    if (!out.length) return '<p class="dnote">아직 배운 단어가 없어요.</p>';
+    return out.reverse().join('');
   }
+
   function tGrammar() {
-    var n = seenUpTo();
-    return window.GRAMMAR.slice(0, n).map(function (g, i) {
+    var n = Math.min(seenUpTo(), PHASE1), out = [];
+    window.GRAMMAR.slice(0, n).forEach(function (g, i) {
       var rows = (g.forms || []).map(function (f) {
         return '<div style="padding:7px 0;border-bottom:1px solid var(--line)">' +
           '<span class="jp">' + esc(f[2]) + '</span>' +
           '<span class="kr">' + esc(kr(f[3])) + ' — ' + esc(f[4] || '') + '</span></div>';
       }).join('');
-      return '<details class="item"><summary><span class="n">' + (i + 1) + '</span>' +
+      out.push('<details class="item"><summary><span class="n">' + (i + 1) + '</span>' +
         '<span class="t">' + esc(g.t) + '</span></summary>' +
-        '<div class="in">' + esc(g.rule) + '<div style="margin-top:10px">' + rows + '</div></div></details>';
+        '<div class="in">' + esc(g.rule) + '<div style="margin-top:10px">' + rows + '</div></div></details>');
+    });
+    (window.ADVANCED || []).slice(0, seenAdv()).forEach(function (d, i) {
+      out.push('<details class="item"><summary><span class="n">' + (PHASE1 + i + 1) + '</span>' +
+        '<span class="t">' + esc(d.biz.jp.slice(0, 18)) + '</span><span class="m">LV' + d.lv + '</span></summary>' +
+        '<div class="in"><span class="jp">' + esc(d.biz.jp) + '</span>' +
+        '<span class="kr">' + esc(kr(d.biz.rd)) + '</span>' + esc(d.biz.ko) +
+        '<div style="margin-top:10px;color:var(--ink-3);font-size:12.5px">' + esc(d.biz.note || '') + '</div>' +
+        '</div></details>');
+    });
+    if (!out.length) return '<p class="dnote">아직 배운 문장이 없어요.</p>';
+    return out.reverse().join('');
+  }
+  function tNumbers() {
+    var list = (window.NUMBERS || []).slice(0, seenAdv());
+    if (!list.length) return '<p class="dnote">숫자 트랙은 Day ' + (PHASE1 + 1) + '부터 시작합니다.</p>';
+    return list.map(function (n, i) {
+      var rows = (n.rows || []).map(function (r) {
+        return '<tr><td class="g">' + esc(r[0]) + '</td><td class="k">' + esc(r[1]) + '</td>' +
+          '<td class="k">' + esc(r[2]) + '</td><td class="g">' + esc(kr(r[2])) + '</td></tr>';
+      }).join('');
+      return '<details class="item"><summary><span class="n">' + (PHASE1 + i + 1) + '</span>' +
+        '<span class="t">' + esc(n.t) + '</span></summary>' +
+        '<div class="in"><table class="reftbl"><tbody>' + rows + '</tbody></table>' +
+        '<div style="margin-top:10px;color:var(--ink-3);font-size:12.5px">' + esc(n.note) + '</div>' +
+        '</div></details>';
     }).reverse().join('');
   }
+
   function tRules() {
     var R = window.REFERENCE;
     return ['dakuten', 'handakuten', 'youon', 'sokuon', 'chouon'].map(function (k) {
@@ -338,8 +444,8 @@
     return '<div class="srow"><div><b>테마</b><div class="sub">' +
         (state.theme === '' ? '시스템 설정 따르기' : state.theme === 'dark' ? '다크' : '라이트') +
       '</div></div><div class="r"><button class="mini" data-theme-auto>시스템</button></div></div>' +
-      '<div class="srow"><div><b>Day 이동</b><div class="sub">1 ~ ' + TOTAL + '</div></div>' +
-        '<div class="r"><input id="jump" class="num" type="number" min="1" max="' + TOTAL + '" value="' + state.day + '">' +
+      '<div class="srow"><div><b>Day 이동</b><div class="sub">1 ~ ' + lastDay() + ' (그 이후는 복습 순환)</div></div>' +
+        '<div class="r"><input id="jump" class="num" type="number" min="1" max="' + MAXDAY + '" value="' + state.day + '">' +
         '<button class="mini" data-jump>이동</button></div></div>' +
       '<div class="srow"><div><b>진도 초기화</b><div class="sub">완료 기록과 연속 일수를 지웁니다</div></div>' +
         '<div class="r"><button class="mini" data-reset><svg style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.7"><use href="#i-reset"></use></svg>초기화</button></div></div>' +
@@ -373,7 +479,7 @@
     if (t.hasAttribute('data-theme-auto')) { state.theme = ''; save(); applyTheme(); drawBody(); toast('시스템 설정을 따릅니다'); return; }
     if (t.hasAttribute('data-jump')) {
       var v = parseInt($('#jump').value, 10);
-      if (!v || v < 1 || v > TOTAL) { toast('1에서 ' + TOTAL + ' 사이 숫자를 넣어주세요'); return; }
+      if (!v || v < 1 || v > MAXDAY) { toast('1에서 ' + MAXDAY + ' 사이 숫자를 넣어주세요'); return; }
       go(v); closeDrawer(); return;
     }
     if (t.hasAttribute('data-reset')) {
