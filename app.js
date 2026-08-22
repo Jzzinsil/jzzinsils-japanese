@@ -79,24 +79,103 @@
     save();
   }
 
-  /* ── 발음 ── */
-  var voice = null, warned = false, ok = 'speechSynthesis' in window;
-  function pick() { if (!ok) return; voice = (window.speechSynthesis.getVoices() || []).filter(function (v) { return /^ja/i.test(v.lang || ''); })[0] || null; }
-  if (ok) { pick(); window.speechSynthesis.onvoiceschanged = pick; }
-  function speak(text, btn) {
-    if (!ok) { toast('이 브라우저는 음성 재생을 지원하지 않아요'); return; }
-    if (!voice) pick();
-    try { window.speechSynthesis.cancel(); } catch (e) {}
-    var u = new SpeechSynthesisUtterance(text);
-    u.lang = 'ja-JP'; u.rate = 0.8;
-    if (voice) u.voice = voice;
-    else if (!warned) { warned = true; toast('일본어 음성이 없어요. Chrome·Safari를 권장해요'); }
-    if (btn) {
-      btn.classList.add('on');
-      var off = function () { btn.classList.remove('on'); };
-      u.onend = off; u.onerror = off; setTimeout(off, 6000);
+  /* ── 발음 ──
+     안드로이드는 utterance.voice를 지정하면 오히려 기기 기본 언어로 되돌아가
+     에러 없이 무음이 된다. 그래서 안드로이드에서는 lang만 주고 voice는 비운다. */
+  var SS = ('speechSynthesis' in window) ? window.speechSynthesis : null;
+  var ANDROID = /android/i.test(navigator.userAgent || '');
+  var jaVoice = null;       // 데스크톱에서만 실제로 지정
+  var jaSeen = false;       // ja 음성을 목록에서 본 적이 있는가
+  var startedOnce = false;  // onstart가 온 적이 있는가
+  var failCount = 0, told = {}, held = null, watch = null, offT = null, litBtn = null;
+
+  var GUIDE_NOJA = '이 기기에 일본어 음성이 없어요.\n설정 → 접근성 → 텍스트 음성 변환 출력 →\n엔진 옆 톱니바퀴 → 음성 데이터 설치 → 日本語\n(갤럭시는 설정 → 접근성 → 글자 읽어주기)';
+  var GUIDE_SILENT = '일본어 음성은 있는데 소리가 안 나요.\n미디어 음량과 무음 모드를 확인해 주세요.\n설정 → 텍스트 음성 변환 출력에서\n일본어를 한 번 재생해보면 원인을 알 수 있어요.';
+
+  function lg(v) { return String((v && v.lang) || '').replace(/_/g, '-'); }
+
+  function note(key, msg) {
+    if (told[key]) return;
+    told[key] = true;
+    var el = $('#toast'); if (!el) return;
+    el.style.whiteSpace = 'pre-line'; el.style.lineHeight = '1.75';
+    el.textContent = msg; el.dataset.show = 'true';
+    clearTimeout(tt);
+    tt = setTimeout(function () {
+      el.dataset.show = 'false'; el.style.whiteSpace = ''; el.style.lineHeight = '';
+    }, 7000);
+  }
+  function unlit() { clearTimeout(offT); if (litBtn) { litBtn.classList.remove('on'); litBtn = null; } }
+
+  // 목록은 비동기로 채워지고 다시 비기도 한다 → 빈 목록으로 덮어쓰지 않는다
+  function pick() {
+    if (!SS) return;
+    var list; try { list = SS.getVoices() || []; } catch (e) { list = []; }
+    if (!list.length) return;
+    var found = null;
+    for (var i = 0; i < list.length; i++) {
+      if (/^ja(-|$)/i.test(lg(list[i]))) {          // 안드로이드는 ja_JP 표기도 쓴다
+        jaSeen = true;
+        if (!found) found = list[i];
+        else if (list[i].localService && !found.localService) found = list[i];
+      }
     }
-    window.speechSynthesis.speak(u);
+    if (found) jaVoice = found;
+  }
+  if (SS) {
+    pick();
+    if (SS.addEventListener) SS.addEventListener('voiceschanged', pick);
+    else SS.onvoiceschanged = pick;
+    setTimeout(pick, 300); setTimeout(pick, 1500);
+  }
+
+  function speak(text, btn) {
+    if (!SS) { note('nosupport', '이 브라우저는 발음 재생을 지원하지 않아요.\n크롬이나 삼성 인터넷에서 열어보세요.'); return; }
+    pick();
+    unlit();
+    if (btn) { btn.classList.add('on'); litBtn = btn; offT = setTimeout(unlit, 8000); }
+
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ja-JP'; u.rate = 0.8; u.pitch = 1; u.volume = 1;
+    if (!ANDROID && jaVoice) { u.voice = jaVoice; u.lang = lg(jaVoice) || 'ja-JP'; }
+
+    var began = false;
+    clearTimeout(watch);
+    u.onstart = function () {
+      began = true; startedOnce = true; failCount = 0;
+      told.noja = false; told.silent = false; told.retry = false;
+      clearTimeout(watch);
+    };
+    u.onend = function () { clearTimeout(watch); unlit(); held = null; };
+    u.onerror = function (e) {
+      clearTimeout(watch); unlit(); held = null;
+      var code = (e && e.error) || '';
+      if (code === 'canceled' || code === 'interrupted') return;
+      if (code === 'not-allowed') { note('gesture', '브라우저가 소리를 막았어요.\n버튼을 한 번 더 눌러주세요.'); return; }
+      if (code === 'language-unavailable' || code === 'voice-unavailable') { note('noja', GUIDE_NOJA); return; }
+      note('err', '발음 재생에 실패했어요 (' + (code || 'unknown') + ')');
+    };
+    held = u;   // 재생 중 GC로 이벤트가 사라지는 것 방지
+
+    function fire() {
+      try { if (SS.paused) SS.resume(); } catch (e) {}
+      try { SS.speak(u); } catch (e) { unlit(); note('err', '발음 재생에 실패했어요'); return; }
+      watch = setTimeout(function () {
+        if (began) return;
+        var live = false; try { live = SS.speaking || SS.pending; } catch (e) {}
+        if (live) return;                       // 이벤트만 안 오는 기기 — 소리는 나는 중
+        unlit(); failCount++;
+        if (failCount === 1 && !startedOnce) { note('retry', '소리가 아직 준비되지 않았어요.\n한 번 더 눌러주세요.'); return; }
+        if (!jaSeen) note('noja', GUIDE_NOJA); else note('silent', GUIDE_SILENT);
+      }, startedOnce ? 900 : 1800);
+    }
+
+    // cancel()은 안드로이드에서 비동기라 직후의 speak()를 삼킨다.
+    // 재생 중일 때만 cancel하고 한 박자 쉰다. 크롬의 음성 허용은 sticky activation이라
+    // setTimeout을 거쳐도 제스처 권한은 유지된다.
+    var busy = false; try { busy = SS.speaking || SS.pending; } catch (e) {}
+    if (busy) { try { SS.cancel(); } catch (e) {} setTimeout(fire, 160); }
+    else fire();
   }
 
   var tt = null;
@@ -118,7 +197,7 @@
   function row(jp, pron, mean, tag) {
     return '<div class="row' + (tag ? ' form' : '') + '">' +
       (tag ? '<span class="tag">' + esc(tag) + '</span>' : '') +
-      '<div class="l"><span class="jp">' + esc(jp) + '</span>' +
+      '<div class="l"><span class="jp" lang="ja">' + esc(jp) + '</span>' +
       (pron ? '<span class="kr">' + esc(pron) + '</span>' : '') + '</div>' +
       (mean ? '<span class="ko">' + esc(mean) + '</span>' : '') +
       say(jp, 'sm') + '</div>';
@@ -126,7 +205,7 @@
   function sentence(jp, pron, mean, when) {
     return '<div class="sent"><div>' +
       (when ? '<p class="when">' + esc(when) + '</p>' : '') +
-      '<p class="jp">' + esc(jp) + '</p>' +
+      '<p class="jp" lang="ja">' + esc(jp) + '</p>' +
       '<p class="kr">' + esc(pron) + '</p>' +
       '<p class="ko">' + esc(mean) + '</p></div>' + say(jp) + '</div>';
   }
@@ -146,7 +225,7 @@
     if (item.pair) meta.push('짝 ' + item.pair);
     return '<section class="block">' + head(idx, label, item.c) +
       '<div class="focus">' +
-        '<div class="glyph">' + esc(item.c) + '</div>' +
+        '<div class="glyph" lang="ja">' + esc(item.c) + '</div>' +
         '<div class="pron">' + esc(item.k) + '</div>' +
         '<div class="meta">' + esc(meta.join(' · ')) + '</div>' +
       '</div>' +
@@ -163,8 +242,8 @@
   function wordBlock(w, idx) {
     return '<section class="block">' + head(idx, '단어', w.w) +
       '<div class="focus">' +
-        '<div class="word">' + esc(w.w) + '</div>' +
-        '<div class="kana">' + esc(w.rd) + '</div>' +
+        '<div class="word" lang="ja">' + esc(w.w) + '</div>' +
+        '<div class="kana" lang="ja">' + esc(w.rd) + '</div>' +
         '<div class="pron">' + esc(kr(w.rd)) + '</div>' +
         '<div class="mean">' + esc(w.m) + '</div>' +
       '</div>' +
@@ -183,14 +262,14 @@
     var exs = (g.ex || []).map(function (e) { return sentence(e.jp, kr(e.rd), e.ko, ''); }).join('');
     return '<section class="block">' + head(idx, '문장 만드는 법', '') +
       '<div class="focus">' +
-        '<div class="pattern">' + esc(g.t) + '</div>' +
+        '<div class="pattern" lang="ja">' + esc(g.t) + '</div>' +
         '<div class="rule">' + esc(g.rule) + '</div>' +
       '</div>' +
       '<div class="rows">' + forms + '</div>' +
       exs +
       '<div class="drill"><span class="q">' + esc(g.drill.q) + '</span>' +
         '<button class="mini" data-reveal>정답</button>' +
-        '<span class="a hidden">' + esc(g.drill.a) + '</span></div>' +
+        '<span class="a hidden" lang="ja">' + esc(g.drill.a) + '</span></div>' +
       more(esc(g.tip)) +
     '</section>';
   }
@@ -199,8 +278,8 @@
   function advWordBlock(d, idx) {
     return '<section class="block">' + head(idx, 'ことば 단어', d.word.w) +
       '<div class="focus">' +
-        '<div class="word">' + esc(d.word.w) + '</div>' +
-        '<div class="kana">' + esc(d.word.rd) + '</div>' +
+        '<div class="word" lang="ja">' + esc(d.word.w) + '</div>' +
+        '<div class="kana" lang="ja">' + esc(d.word.rd) + '</div>' +
         '<div class="pron">' + esc(kr(d.word.rd)) + '</div>' +
         '<div class="mean">' + esc(d.word.m) + '</div>' +
         '<div class="meta">' + esc(d.word.pos + ' · ' + d.theme) + '</div>' +
@@ -360,7 +439,7 @@
         out += '<button class="cell" data-off="' + (!on) + '" data-now="' + (n === state.day) + '"' +
           ' data-say="' + esc(it.c) + '" data-info="' + esc(it.c + ' · ' + it.k + ' · ' + it.r + (on ? '' : ' (Day ' + n + ')')) + '"' +
           ' aria-label="' + esc(it.c + ' ' + it.k) + '">' +
-          '<span class="c">' + esc(it.c) + '</span><span class="r">' + esc(on ? it.k : 'D' + n) + '</span></button>';
+          '<span class="c" lang="ja">' + esc(it.c) + '</span><span class="r">' + esc(on ? it.k : 'D' + n) + '</span></button>';
         if (n === 38 || n === 46) out += '<span class="sp"></span><span class="sp"></span>';
       });
       return '<div class="clabel">' + label + '</div><div class="chart">' + out + '</div>';
@@ -372,16 +451,16 @@
     var n = Math.min(seenUpTo(), PHASE1), out = [];
     window.WORDS.slice(0, n).forEach(function (w, i) {
       out.push('<details class="item"><summary><span class="n">' + (i + 1) + '</span>' +
-        '<span class="t">' + esc(w.w) + '</span><span class="m">' + esc(w.m) + '</span></summary>' +
+        '<span class="t" lang="ja">' + esc(w.w) + '</span><span class="m">' + esc(w.m) + '</span></summary>' +
         '<div class="in"><span class="kr">' + esc(w.rd) + ' · ' + esc(kr(w.rd)) + '</span><br>' +
-        '<span class="jp">' + esc(w.jp) + '</span><span class="kr">' + esc(kr(w.jpr)) + '</span>' +
+        '<span class="jp" lang="ja">' + esc(w.jp) + '</span><span class="kr">' + esc(kr(w.jpr)) + '</span>' +
         esc(w.ko) + '</div></details>');
     });
     (window.ADVANCED || []).slice(0, seenAdv()).forEach(function (d, i) {
       out.push('<details class="item"><summary><span class="n">' + (PHASE1 + i + 1) + '</span>' +
-        '<span class="t">' + esc(d.word.w) + '</span><span class="m">' + esc(d.word.m) + '</span></summary>' +
+        '<span class="t" lang="ja">' + esc(d.word.w) + '</span><span class="m">' + esc(d.word.m) + '</span></summary>' +
         '<div class="in"><span class="kr">' + esc(d.word.rd) + ' · ' + esc(kr(d.word.rd)) + '</span><br>' +
-        '<span class="jp">' + esc(d.use.jp) + '</span><span class="kr">' + esc(kr(d.use.rd)) + '</span>' +
+        '<span class="jp" lang="ja">' + esc(d.use.jp) + '</span><span class="kr">' + esc(kr(d.use.rd)) + '</span>' +
         esc(d.use.ko) + '</div></details>');
     });
     if (!out.length) return '<p class="dnote">아직 배운 단어가 없어요.</p>';
@@ -393,17 +472,17 @@
     window.GRAMMAR.slice(0, n).forEach(function (g, i) {
       var rows = (g.forms || []).map(function (f) {
         return '<div style="padding:7px 0;border-bottom:1px solid var(--line)">' +
-          '<span class="jp">' + esc(f[2]) + '</span>' +
+          '<span class="jp" lang="ja">' + esc(f[2]) + '</span>' +
           '<span class="kr">' + esc(kr(f[3])) + ' — ' + esc(f[4] || '') + '</span></div>';
       }).join('');
       out.push('<details class="item"><summary><span class="n">' + (i + 1) + '</span>' +
-        '<span class="t">' + esc(g.t) + '</span></summary>' +
+        '<span class="t" lang="ja">' + esc(g.t) + '</span></summary>' +
         '<div class="in">' + esc(g.rule) + '<div style="margin-top:10px">' + rows + '</div></div></details>');
     });
     (window.ADVANCED || []).slice(0, seenAdv()).forEach(function (d, i) {
       out.push('<details class="item"><summary><span class="n">' + (PHASE1 + i + 1) + '</span>' +
-        '<span class="t">' + esc(d.biz.jp.slice(0, 18)) + '</span><span class="m">LV' + d.lv + '</span></summary>' +
-        '<div class="in"><span class="jp">' + esc(d.biz.jp) + '</span>' +
+        '<span class="t" lang="ja">' + esc(d.biz.jp.slice(0, 18)) + '</span><span class="m">LV' + d.lv + '</span></summary>' +
+        '<div class="in"><span class="jp" lang="ja">' + esc(d.biz.jp) + '</span>' +
         '<span class="kr">' + esc(kr(d.biz.rd)) + '</span>' + esc(d.biz.ko) +
         '<div style="margin-top:10px;color:var(--ink-3);font-size:12.5px">' + esc(d.biz.note || '') + '</div>' +
         '</div></details>');
@@ -416,8 +495,8 @@
     if (!list.length) return '<p class="dnote">숫자 트랙은 Day ' + (PHASE1 + 1) + '부터 시작합니다.</p>';
     return list.map(function (n, i) {
       var rows = (n.rows || []).map(function (r) {
-        return '<tr><td class="g">' + esc(r[0]) + '</td><td class="k">' + esc(r[1]) + '</td>' +
-          '<td class="k">' + esc(r[2]) + '</td><td class="g">' + esc(kr(r[2])) + '</td></tr>';
+        return '<tr><td class="g">' + esc(r[0]) + '</td><td class="k" lang="ja">' + esc(r[1]) + '</td>' +
+          '<td class="k" lang="ja">' + esc(r[2]) + '</td><td class="g">' + esc(kr(r[2])) + '</td></tr>';
       }).join('');
       return '<details class="item"><summary><span class="n">' + (PHASE1 + i + 1) + '</span>' +
         '<span class="t">' + esc(n.t) + '</span></summary>' +
@@ -432,8 +511,8 @@
     return ['dakuten', 'handakuten', 'youon', 'sokuon', 'chouon'].map(function (k) {
       var r = R[k];
       var rows = r.rows.map(function (x) {
-        return '<tr><td class="g">' + esc(x[0]) + '</td><td class="k">' + esc(x[1]) + '</td>' +
-          '<td class="g">' + esc(x[2]) + '</td><td class="k">' + esc(x[3]) + '</td></tr>';
+        return '<tr><td class="g">' + esc(x[0]) + '</td><td class="k" lang="ja">' + esc(x[1]) + '</td>' +
+          '<td class="g">' + esc(x[2]) + '</td><td class="k" lang="ja">' + esc(x[3]) + '</td></tr>';
       }).join('');
       return '<div class="refblock"><h3>' + esc(r.title) + '</h3><p>' + esc(r.desc) + '</p>' +
         '<table class="reftbl"><tbody>' + rows + '</tbody></table>' +
